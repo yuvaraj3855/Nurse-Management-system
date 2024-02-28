@@ -16,7 +16,7 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Grid from '@mui/material/Grid';
 import Modal from '@mui/material/Modal';
-
+import dayjs from 'dayjs';
 import Menu from '@mui/material/Menu';
 import InputLabel from '@mui/material/InputLabel';
 import { FormControl, useFormControlContext } from '@mui/base/FormControl';
@@ -33,7 +33,7 @@ const style = {
   position: 'absolute',
   top: '50%',
   left: '50%',
-  width: 400,
+  width: 500,
   transform: 'translate(-50%, -50%)',
   bgcolor: 'background.paper',
   boxShadow: 24,
@@ -41,25 +41,25 @@ const style = {
   mb: 2,
   gap: 4,
   borderRadius: 4,
-  '& .MuiTextField-root': { mb: 2, width: '100%' }
+  '& .MuiTextField-root': { mb: 3, width: '100%' }
 };
 
 const App = () => {
   const [nurses, setNurses] = useState([]);
-  const [anchorEl, setAnchorEl] = useState(null);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
   const [selectedNurse, setSelectedNurse] = useState({});
   const [sortField, setSortField] = useState('id');
   const [isAscending, setIsAscending] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedDelID, setDeleteID] = useState(0);
   const [selectedDownloadFormat, setSelectedDownloadFormat] = useState(null);
   const [selectedDownloadClicked, setSelectedDownloadClicked] = useState(false);
-
   const [open, setOpen] = React.useState(false);
   const handleOpen = () => setOpen(true);
   const handleClose = () => setOpen(false);
-  
+  const [openEdit, setOpenEdit] = React.useState(false);
+  const handleCloseEdit = () => setOpenEdit(false);
+  const [openDel, setOpenDel] = React.useState(false);
+  const handleCloseDel = () => setOpenDel(false);
   useEffect(() => {
     fetchAndFilterData();
   }, [searchQuery, sortField, isAscending]);
@@ -95,30 +95,42 @@ const App = () => {
     }
   };
   const EditNurse = async (nurse) => {
-    setShowEditModal(true);
+    setOpenEdit(true);
     setSelectedNurse(nurse);
+  }
+  const DelNurse = async (nurse) => {
+    setOpenDel(true);
+    setSelectedNurse(nurse);
+    setDeleteID(nurse.id)
   }
   const handleEditNurse = async (editedNurse) => {
     try {
       const response = await axios.post(`http://localhost:3001/api/nurses/edit/${editedNurse.id}`, editedNurse);
       const updatedNurses = nurses.map((nurse) => (nurse.id === editedNurse.id ? response.data : nurse));
       setNurses(updatedNurses);
-      setShowEditModal(false);
+      handleCloseEdit()
       fetchAndFilterData();
     } catch (error) {
       console.error('Error editing nurse:', error);
     }
   };
-
-  const handleDeleteNurse = async (id) => {
-    if (window.confirm('Are you sure you want to delete this nurse?')) {
-      try {
-        await axios.delete(`http://localhost:3001/api/nurses/${id}`);
-        setNurses(nurses.filter((nurse) => nurse.id !== id));
-        fetchAndFilterData();
-      } catch (error) {
-        console.error('Error deleting nurse:', error);
-      }
+  const ConfirmationDialog = ({ message, onConfirm, onCancel }) => {
+    return (
+      <div className="confirmation-dialog">
+        <p>{message}</p>
+        <button onClick={onConfirm}>Confirm</button>
+        <button onClick={onCancel}>Cancel</button>
+      </div>
+    );
+  };
+  const handleDeleteNurse = async () => {
+    try {
+      await axios.delete(`http://localhost:3001/api/nurses/${selectedDelID}`);
+      setNurses(nurses.filter((nurse) => nurse.id !== selectedDelID));
+      fetchAndFilterData();
+      setOpenDel(false)
+    } catch (error) {
+      console.error('Error deleting nurse:', error);
     }
   };
 
@@ -236,7 +248,7 @@ const App = () => {
                   <Button sx={{ color: '#ffc107', bgcolor: '#dee2e6', fontWeight: '600' }} startIcon={<BorderColorIcon />} onClick={() => EditNurse(nurse)}>
                     EDIT
                   </Button>
-                  <Button sx={{ color: 'red', bgcolor: '#dee2e6', fontWeight: '600' }} endIcon={<DeleteForeverIcon />} onClick={() => handleDeleteNurse(nurse.id)}>
+                  <Button sx={{ color: 'red', bgcolor: '#dee2e6', fontWeight: '600' }} endIcon={<DeleteForeverIcon />} onClick={() => DelNurse(nurse)}>
                     Delete
                   </Button>
                 </ButtonGroup>
@@ -264,17 +276,19 @@ const App = () => {
         });
       }} sx={style}>
         <FormControl >
-          <h4 class="nurse-list">Add New</h4>
           <Grid>
-            <TextField label="Name" name='name' size="large" id="outlined-size-normal" />
+            <h3 class="nurse-list">Add New</h3>
           </Grid>
           <Grid>
-            <TextField label="License Number" name='licenseNumber' size="large" id="outlined-size-normal" />
+            <TextField label="Name" name='name' required size="large" id="outlined-size-normal" />
           </Grid>
           <Grid>
-            <LocalizationProvider dateAdapter={AdapterDayjs}>
+            <TextField label="License Number" required name='licenseNumber' size="large" id="outlined-size-normal" />
+          </Grid>
+          <Grid>
+            <LocalizationProvider required dateAdapter={AdapterDayjs}>
               <DemoContainer components={['DatePicker']}>
-                <DatePicker name="dob" />
+                <DatePicker defaultValue={dayjs()} format="DD-MM-YYYY" name="dob" />
               </DemoContainer>
             </LocalizationProvider>
           </Grid>
@@ -291,38 +305,86 @@ const App = () => {
         </FormControl>
       </Box>
     </Modal>
-    {/* <Modal show={showAddModal} onHide={() => setShowAddModal(false)}>
-      <Modal.Header closeButton>
-        <Modal.Title>Add Nurse</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        <Form onSubmit={(e) => {
-          e.preventDefault();
-          handleAddNurse({
-            name: e.target.name.value,
-            licenseNumber: e.target.licenseNumber.value,
-            dob: e.target.dob.value,
-          });
-        }}>
-          <Form.Group className="mb-3">
-            <Form.Label>Name</Form.Label>
-            <Form.Control type="text" name="name" placeholder="Enter name" required />
-          </Form.Group>
-          <Form.Group className="mb-3">
-            <Form.Label>License Number</Form.Label>
-            <Form.Control type="text" name="licenseNumber" placeholder="Enter license number" required />
-          </Form.Group>
-          <Form.Group className="mb-3">
-            <Form.Label>Date Of Birth</Form.Label>
-            <Form.Control type="date" name="dob" placeholder="Enter date of birth" required />
-          </Form.Group>
-          <Button variant="primary" type="submit">
-            Submit
-          </Button>
-        </Form>
-      </Modal.Body>
+    <Modal
+      open={openEdit}
+      onClose={handleCloseEdit}
+      aria-labelledby="modal-modal-title"
+      aria-describedby="modal-modal-description"
+    >
+      <Box component="form" onSubmit={(e) => {
+        e.preventDefault();
+        handleEditNurse({
+          id: selectedNurse.id,
+          name: e.target.name.value,
+          licenseNumber: e.target.licenseNumber.value,
+          dob: e.target.dob.value,
+        });
+      }} sx={style}>
+        <FormControl >
+          <Grid>
+            <h4 class="nurse-list">Edit {selectedNurse.name}</h4>
+          </Grid>
+          <Grid>
+            <TextField label="Name" name='name' required defaultValue={selectedNurse.name} size="large" id="outlined-size-normal" />
+          </Grid>
+          <Grid>
+            <TextField label="License Number" required name='licenseNumber' defaultValue={selectedNurse.licenseNumber} size="large" id="outlined-size-normal" />
+          </Grid>
+          <Grid>
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <DemoContainer components={['DatePicker']}>
+                <DatePicker required format="DD-MM-YYYY" defaultValue={dayjs(selectedNurse.dob, "DD-MM-YYYY")} name="dob" />
+              </DemoContainer>
+            </LocalizationProvider>
+          </Grid>
+          <Grid>
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              sx={{ mt: 3, mb: 2 }}
+            >
+              Submit
+            </Button>
+          </Grid>
+        </FormControl>
+      </Box>
     </Modal>
-    <Modal show={showEditModal} onHide={() => setShowEditModal(false)}>
+    <Modal
+      open={openDel}
+      onClose={handleCloseDel}
+      aria-labelledby="modal-modal-title"
+      aria-describedby="modal-modal-description"
+    >
+      <Box sx={style}>
+        <Grid container spacing={2} alignItems="center" justifyContent="space-between">
+          <Grid item xs={12}>
+            <h4 className="nurse-list">Delete {selectedNurse.name}</h4>
+          </Grid>
+          <Grid item xs={12}>
+            <h6>Are you sure? you want to, Delete this record Permemently?.</h6>
+          </Grid>
+          <Grid item xs={4}>
+            <Button onClick={handleCloseDel}
+              fullWidth
+              sx={{ color: 'white', borderRadius: 4, bgcolor: 'gold', fontWeight: '600' }}
+            >
+              Cancel
+            </Button>
+          </Grid>
+          <Grid item xs={4}>
+            <Button onClick={handleDeleteNurse}
+              fullWidth
+              sx={{ color: 'white', borderRadius: 4, bgcolor: 'red', fontWeight: '600' }}
+            >
+              Confirm
+            </Button>
+          </Grid>
+        </Grid>
+      </Box>
+    </Modal>
+
+    {/* <Modal show={showEditModal} onHide={() => setShowEditModal(false)}>
       <Modal.Header closeButton>
         <Modal.Title>Edit Nurse</Modal.Title>
       </Modal.Header>
