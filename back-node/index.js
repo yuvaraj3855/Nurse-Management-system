@@ -28,7 +28,7 @@ app.get('/api/nurses', async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT * FROM Nurses');
     res.json(rows);
-    console.log(rows)
+    // console.log(rows)
   } catch (error) {
     console.error('Error fetching nurses:', error);
     res.status(500).send('Internal Server Error');
@@ -36,17 +36,20 @@ app.get('/api/nurses', async (req, res) => {
 });
 function calculateAge(dob) {
   if (!isValidDate(dob)) {
-    throw new Error('Invalid date format. Please use YYYY-MM-DD format.');
+    throw new Error('Invalid date format. Please use DD/MM/YYYY format.');
   }
-  const dateOfBirth = new Date(dob);
+  console.log(dob)
+  const [month, day, year] = dob.split('/');
+  const dateOfBirth = new Date(`${year}-${month}-${day}`);
+  console.log(dateOfBirth)
   const today = new Date();
   const ageDiffInMs = today.getTime() - dateOfBirth.getTime();
   const ageInYears = Math.floor(ageDiffInMs / (1000 * 60 * 60 * 24 * 365.25));
   return ageInYears;
 }
-function isValidDate(dateString) {
-  const regex = /^\d{4}-\d{2}-\d{2}$/;
 
+function isValidDate(dateString) {
+  const regex = /^\d{2}\/\d{2}\/\d{4}$/;
   return regex.test(dateString);
 }
 
@@ -63,7 +66,6 @@ app.post('/api/nurses', async (req, res) => {
     if (validationResult.error) {
       return res.status(400).send(validationResult.error.details[0].message);
     }
-    console.log(req.body)
     const { name, licenseNumber, dob } = req.body;
     const age = calculateAge(dob);
     const formattedDob = formatDate(new Date(dob));
